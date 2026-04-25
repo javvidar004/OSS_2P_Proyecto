@@ -1,0 +1,71 @@
+```mermaid
+graph TB
+    %% Usuarios externos
+    U[("👥 Usuarios\n(100 colaboradores)")]
+    INT[("🌐 Internet")]
+
+    %% Capa de acceso
+    RP["🔒 Nginx Reverse Proxy\n+ Let's Encrypt SSL"]
+
+    %% Capa IAM - Central
+    AK["🔑 AUTHENTIK\nIdentity Provider\nSAML 2.0 | OIDC | OAuth2\n(MIT License)"]
+
+    %% Aplicaciones
+    ERP["📦 ERPNext\nERP / Gestión Empresarial\nInventario · Ventas · Finanzas\n(GPL-3.0)"]
+    CRM["💼 SuiteCRM\nCRM / Gestión de Clientes\nPipeline · Cotizaciones\n(AGPL-3.0)"]
+    MM["💬 Mattermost\nComunicación Interna\nCanales · Notificaciones\n(MIT)"]
+
+    %% Bases de datos
+    DB_ERP[("🗄️ MariaDB\nERPNext DB")]
+    DB_CRM[("🗄️ MariaDB\nSuiteCRM DB")]
+    DB_AK[("🗄️ PostgreSQL\nAuthentik DB")]
+    DB_MM[("🗄️ PostgreSQL\nMattermost DB")]
+    REDIS[("⚡ Redis\nCaché")]
+
+    %% Infraestructura
+    DOCKER["🐳 Docker Compose\nRed: logicore-net"]
+    SERVER["🖥️ Ubuntu 22.04 LTS\nServidor LogiCore (on-premise)"]
+
+    %% Conexiones de usuario
+    U --> INT
+    INT --> RP
+    RP --> AK
+
+    %% SSO desde Authentik
+    AK -->|"SAML 2.0"| ERP
+    AK -->|"OAuth2 / OIDC"| CRM
+    AK -->|"OIDC"| MM
+
+    %% Integraciones entre apps
+    CRM -->|"REST API\n(Crear Orden de Venta)"| ERP
+    ERP -->|"REST API\n(Consulta de Inventario)"| CRM
+
+    %% Webhooks hacia Mattermost
+    ERP -->|"Webhook\n(Alertas de stock)"| MM
+    CRM -->|"Webhook\n(Leads y oportunidades)"| MM
+    AK  -->|"Webhook\n(Alertas de seguridad)"| MM
+
+    %% Bases de datos
+    ERP --- DB_ERP
+    CRM --- DB_CRM
+    AK  --- DB_AK
+    AK  --- REDIS
+    MM  --- DB_MM
+
+    %% Infraestructura
+    ERP & CRM & AK & MM & DB_ERP & DB_CRM & DB_AK & DB_MM & REDIS --- DOCKER
+    DOCKER --- SERVER
+
+    %% Estilos
+    classDef app fill:#1F4E79,stroke:#1A5276,color:#fff,rx:8
+    classDef iam fill:#1A5276,stroke:#154360,color:#fff,rx:8,font-weight:bold
+    classDef db  fill:#2E7D32,stroke:#1B5E20,color:#fff,rx:4
+    classDef infra fill:#4A4A4A,stroke:#333,color:#fff,rx:4
+    classDef user fill:#7B1FA2,stroke:#6A1B9A,color:#fff,rx:20
+
+    class ERP,CRM,MM app
+    class AK iam
+    class DB_ERP,DB_CRM,DB_AK,DB_MM,REDIS db
+    class DOCKER,SERVER,RP infra
+    class U,INT user
+```

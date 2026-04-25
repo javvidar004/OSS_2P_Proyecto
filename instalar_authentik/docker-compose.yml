@@ -1,0 +1,247 @@
+# ============================================================
+# LogiCore Solutions — Ecosistema OSS
+# ERPNext + SuiteCRM + Authentik + Mattermost
+# ============================================================
+# Uso: docker compose up -d
+# ============================================================
+
+version: "3.8"
+
+networks:
+  logicore-net:
+    driver: bridge
+
+volumes:
+  authentik-db:
+  authentik-redis:
+  erpnext-db:
+  erpnext-sites:
+  suitecrm-db:
+  suitecrm-data:
+  mattermost-db:
+  mattermost-data:
+  mattermost-logs:
+
+# ─────────────────────────────────────────
+# AUTHENTIK — Identity Provider (IAM/SSO)
+# ─────────────────────────────────────────
+services:
+  authentik-db:
+    image: postgres:15-alpine
+    container_name: authentik-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASSWORD:-ChangeMeStr0ng!}
+    volumes:
+      - authentik-db:/var/lib/postgresql/data
+    networks:
+      - logicore-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  authentik-redis:
+    image: redis:7-alpine
+    container_name: authentik-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-RedisPass123!}
+    volumes:
+      - authentik-redis:/data
+    networks:
+      - logicore-net
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2024.2
+    container_name: authentik-server
+    restart: unless-stopped
+    command: server
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_REDIS__PASSWORD: ${REDIS_PASSWORD:-RedisPass123!}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD:-ChangeMeStr0ng!}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:-please-change-this-in-production-!!}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    volumes:
+      - ./media:/media
+      - ./custom-templates:/templates
+    networks:
+      - logicore-net
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_started
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2024.2
+    container_name: authentik-worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_REDIS__PASSWORD: ${REDIS_PASSWORD:-RedisPass123!}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD:-ChangeMeStr0ng!}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:-please-change-this-in-production-!!}
+    volumes:
+      - ./media:/media
+      - ./custom-templates:/templates
+    networks:
+      - logicore-net
+    depends_on:
+      - authentik-db
+      - authentik-redis
+
+# ─────────────────────────────────────────
+# ERPNEXT — ERP
+# ─────────────────────────────────────────
+  erpnext-db:
+    image: mariadb:10.6
+    container_name: erpnext-db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ERPNEXT_DB_ROOT_PASSWORD:-ERPRoot@2025!}
+      MYSQL_DATABASE: erpnext
+      MYSQL_USER: erpnext
+      MYSQL_PASSWORD: ${ERPNEXT_DB_PASSWORD:-ERPUser@2025!}
+    volumes:
+      - erpnext-db:/var/lib/mysql
+    networks:
+      - logicore-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  erpnext:
+    image: frappe/erpnext:v15
+    container_name: erpnext
+    restart: unless-stopped
+    environment:
+      DB_HOST: erpnext-db
+      DB_PORT: "3306"
+      MYSQL_ROOT_PASSWORD: ${ERPNEXT_DB_ROOT_PASSWORD:-ERPRoot@2025!}
+      MARIADB_ROOT_PASSWORD: ${ERPNEXT_DB_ROOT_PASSWORD:-ERPRoot@2025!}
+      FRAPPE_SITE_NAME_HEADER: erpnext.logicore.local
+      SITES: erpnext.logicore.local
+    ports:
+      - "8080:8080"
+    volumes:
+      - erpnext-sites:/home/frappe/frappe-bench/sites
+    networks:
+      - logicore-net
+    depends_on:
+      erpnext-db:
+        condition: service_healthy
+
+# ─────────────────────────────────────────
+# SUITECRM — CRM
+# ─────────────────────────────────────────
+  suitecrm-db:
+    image: mariadb:10.6
+    container_name: suitecrm-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SUITECRM_DB_ROOT_PASSWORD:-CRMRoot@2025!}
+      MYSQL_DATABASE: suitecrm
+      MYSQL_USER: suitecrm
+      MYSQL_PASSWORD: ${SUITECRM_DB_PASSWORD:-CRMUser@2025!}
+    volumes:
+      - suitecrm-db:/var/lib/mysql
+    networks:
+      - logicore-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  suitecrm:
+    image: bitnami/suitecrm:8
+    container_name: suitecrm
+    restart: unless-stopped
+    environment:
+      SUITECRM_DATABASE_HOST: suitecrm-db
+      SUITECRM_DATABASE_PORT_NUMBER: "3306"
+      SUITECRM_DATABASE_NAME: suitecrm
+      SUITECRM_DATABASE_USER: suitecrm
+      SUITECRM_DATABASE_PASSWORD: ${SUITECRM_DB_PASSWORD:-CRMUser@2025!}
+      SUITECRM_USERNAME: admin
+      SUITECRM_PASSWORD: ${SUITECRM_ADMIN_PASSWORD:-SuiteAdmin@2025!}
+      SUITECRM_EMAIL: admin@logicore.mx
+      SUITECRM_HOST: suitecrm.logicore.local
+    ports:
+      - "8081:8080"
+    volumes:
+      - suitecrm-data:/bitnami/suitecrm
+    networks:
+      - logicore-net
+    depends_on:
+      suitecrm-db:
+        condition: service_healthy
+
+# ─────────────────────────────────────────
+# MATTERMOST — Comunicación interna
+# ─────────────────────────────────────────
+  mattermost-db:
+    image: postgres:15-alpine
+    container_name: mattermost-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mattermost
+      POSTGRES_USER: mattermost
+      POSTGRES_PASSWORD: ${MATTERMOST_DB_PASSWORD:-MMPass@2025!}
+    volumes:
+      - mattermost-db:/var/lib/postgresql/data
+    networks:
+      - logicore-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mattermost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:9
+    container_name: mattermost
+    restart: unless-stopped
+    environment:
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${MATTERMOST_DB_PASSWORD:-MMPass@2025!}@mattermost-db:5432/mattermost?sslmode=disable
+      MM_SERVICESETTINGS_SITEURL: http://localhost:8065
+      # SSO con Authentik vía GitLab OAuth (compatible con Authentik)
+      MM_GITLABSETTINGS_ENABLE: "true"
+      MM_GITLABSETTINGS_ID: ${MM_OAUTH_ID:-mattermost-client-id}
+      MM_GITLABSETTINGS_SECRET: ${MM_OAUTH_SECRET:-mattermost-client-secret}
+      MM_GITLABSETTINGS_AUTHENDPOINT: http://authentik-server:9000/application/o/authorize/
+      MM_GITLABSETTINGS_TOKENENDPOINT: http://authentik-server:9000/application/o/token/
+      MM_GITLABSETTINGS_USERAPIENDPOINT: http://authentik-server:9000/application/o/userinfo/
+    ports:
+      - "8065:8065"
+    volumes:
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+    networks:
+      - logicore-net
+    depends_on:
+      mattermost-db:
+        condition: service_healthy
+      authentik-server:
+        condition: service_started
