@@ -1,8 +1,8 @@
-Guía de Instalación de SuiteCRM 8.9.3
+# Guía de Instalación de SuiteCRM 8.9.3
 
 Este documento explica cómo utilizar el script de automatización para preparar un servidor basado en Ubuntu/Debian, instalar SuiteCRM 8.9.3 y las consideraciones críticas que se deben tomar para garantizar la estabilidad del sistema.
 
-1. ¿Qué hace el script?
+## 1. ¿Qué hace el script?
 
 El script automatiza las tareas más propensas a errores humanos durante la instalación:
 
@@ -34,10 +34,11 @@ Establece permisos 755 generales.
 
 Establece permisos 775 específicos en carpetas de escritura dinámica (cache, custom, modules, themes, data, upload), tal como indica la guía de descarga adjunta.
 
-2. El Script de Instalación
+## 2. El Script de Instalación
 
 Crea un archivo llamado instalar.sh, pega el siguiente código y ejecútalo con sudo bash instalar.sh.
 
+´´´
 #!/bin/bash
 
 # 1. Verificación de permisos
@@ -78,9 +79,9 @@ systemctl restart apache2
 systemctl restart mysql
 
 echo "--- PROCESO DE SCRIPT COMPLETADO ---"
+´´´
 
-
-3. Consideraciones Adicionales (Puntos Críticos)
+## 3. Consideraciones Adicionales (Puntos Críticos)
 
 Para completar la instalación con éxito, el administrador debe realizar las siguientes tareas manuales:
 
