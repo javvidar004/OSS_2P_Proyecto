@@ -41,7 +41,7 @@ Crea un archivo llamado instalar.sh, pega el siguiente código y ejecútalo con 
 ´´´
 #!/bin/bash
 
-# 1. Verificación de permisos
+1. Verificación de permisos
 if [ "$EUID" -ne 0 ]; then 
   echo "Por favor, ejecuta como root o usando sudo."
   exit
